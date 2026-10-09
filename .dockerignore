@@ -1,0 +1,5 @@
+.git
+.github
+*.md
+start.sh
+docker-compose.yml

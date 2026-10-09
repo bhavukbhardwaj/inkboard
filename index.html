@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>*,*::before,*::after{box-sizing:border-box}body{margin:0;font-size:14px}[hidden]{display:none!important}</style>
+<title>Inkboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: slim top bar, scrolling stage of white pages, floating vertical tool rail on the left (bottom bar on phones). */
+:root{
+  --bg:#e4e6eb; --panel:#fbfbfc; --line:#d2d5dc; --fg:#1a1d23; --muted:#5d6472;
+  --sel:#1a1d23; --sel-fg:#ffffff; --accent:#e0352b; --shadow:0 1px 2px rgba(20,24,33,.08),0 8px 24px rgba(20,24,33,.10);
+  --ui:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111318; --panel:#1b1e25; --line:#2c3039; --fg:#e7e9ee; --muted:#9299a7;
+  --sel:#e7e9ee; --sel-fg:#111318; --accent:#ff4a3d; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111318; --panel:#1b1e25; --line:#2c3039; --fg:#e7e9ee; --muted:#9299a7;
+  --sel:#e7e9ee; --sel-fg:#111318; --accent:#ff4a3d; --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45); color-scheme:dark}
+
+html,body{height:100%}
+body{background:var(--bg);color:var(--fg);font-family:var(--ui);display:grid;grid-template-rows:auto 1fr;overflow:hidden}
+button{font:inherit;color:inherit}
+kbd{font-family:var(--mono);font-size:11px;padding:1px 5px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;color:var(--muted);background:var(--panel)}
+
+.top{display:flex;align-items:center;gap:12px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);min-width:0;z-index:30}
+.brand{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:-.01em;font-size:15px;flex:none}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%,transparent)}
+.file{color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.spacer{flex:1}
+.pager,.zoom{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted);flex:none}
+.zoom span{min-width:42px;text-align:center}
+.ib{border:1px solid transparent;background:transparent;border-radius:8px;height:30px;min-width:30px;padding:0 8px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.ib:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.ib:focus-visible,.tool:focus-visible,.sw:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.primary{background:var(--sel);color:var(--sel-fg);font-weight:600;font-size:13px;padding:0 12px}
+.primary:hover{background:var(--sel);opacity:.88}
+
+#stage{position:relative;overflow:auto;display:flex;flex-direction:column;align-items:center;gap:24px;padding:24px 24px 48px 96px;overscroll-behavior:contain}
+#stage[data-tool="laser"],#stage[data-tool="pen"],#stage[data-tool="hl"],#stage[data-tool="eraser"]{cursor:none}
+.row{display:flex;gap:16px;align-items:flex-start;flex:none}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px;flex:none}
+.seg button{border:0;background:transparent;border-radius:7px;height:26px;padding:0 10px;font-size:12px;font-weight:600;color:var(--muted);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.seg button[aria-pressed="true"]{background:var(--sel);color:var(--sel-fg)}
+.seg button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.seg svg{width:16px;height:14px}
+.page{position:relative;flex:none;background:#fff;box-shadow:var(--shadow);border-radius:2px}
+.page canvas{position:absolute;inset:0;width:100%;height:100%}
+.page .ink{touch-action:none}
+#stage[data-tool="hand"] .ink,#stage[data-tool="laser"] .ink{pointer-events:none;touch-action:auto}
+.pnum{position:absolute;top:100%;right:0;margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+.welcome{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;padding:16px}
+.welcome div{max-width:420px;text-align:center;color:#3b404b;display:grid;gap:10px;justify-items:center}
+.welcome h1{margin:0;font-size:clamp(18px,3vw,26px);letter-spacing:-.02em;text-wrap:balance;color:#15181d}
+.welcome p{margin:0;font-size:14px;line-height:1.5}
+.welcome button{pointer-events:auto;margin-top:6px;background:#15181d;color:#fff;border:0;border-radius:9px;padding:9px 16px;font-weight:600;cursor:pointer}
+
+.tools{position:fixed;left:14px;top:50%;transform:translateY(-50%);z-index:25;display:flex;flex-direction:column;align-items:center;gap:4px;padding:8px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);max-height:calc(100% - 80px);overflow-y:auto}
+.tool{width:40px;height:40px;border-radius:10px;border:0;background:transparent;cursor:pointer;display:grid;place-items:center;position:relative;flex:none}
+.tool:hover{background:color-mix(in srgb,var(--fg) 8%,transparent)}
+.tool[aria-pressed="true"]{background:var(--sel);color:var(--sel-fg)}
+.tool svg{width:20px;height:20px}
+.sep{width:24px;height:1px;background:var(--line);margin:4px 0;flex:none}
+.sw{width:22px;height:22px;border-radius:50%;border:2px solid var(--panel);box-shadow:0 0 0 1px var(--line);cursor:pointer;padding:0;flex:none;margin:3px}
+.sw[aria-pressed="true"]{box-shadow:0 0 0 2px var(--fg)}
+.size i{display:block;border-radius:50%;background:currentColor}
+#fadeBtn[aria-pressed="true"]{background:var(--accent);color:#fff}
+
+.help{position:fixed;left:76px;top:50%;transform:translateY(-50%);z-index:26;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:14px 16px;width:280px;font-size:13px}
+.help h2{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.help dl{margin:0;display:grid;grid-template-columns:auto 1fr;gap:6px 12px;align-items:center}
+.help dd{margin:0}
+.help p{margin:10px 0 0;color:var(--muted);line-height:1.45}
+
+#overlay{position:fixed;inset:0;pointer-events:none;z-index:20}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:40;background:var(--sel);color:var(--sel-fg);padding:8px 14px;border-radius:9px;font-size:13px;font-weight:500;box-shadow:var(--shadow);max-width:calc(100% - 32px)}
+.drop{position:fixed;inset:12px;border:2px dashed var(--accent);border-radius:16px;z-index:45;display:grid;place-items:center;background:color-mix(in srgb,var(--bg) 80%,transparent);font-weight:600;font-size:18px;pointer-events:none}
+
+body.bare .top,body.bare .tools,body.bare .help{display:none}
+body.bare #stage{padding-left:24px}
+
+@media (max-width:640px){
+  .file,.zoom{display:none}
+  #stage{padding:16px 16px 96px}
+  .tools{left:8px;right:8px;top:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));transform:none;flex-direction:row;overflow-x:auto;overflow-y:hidden;max-height:none}
+  .sep{width:1px;height:24px;margin:0 4px}
+  .help{left:16px;right:16px;width:auto;top:auto;bottom:80px;transform:none}
+}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand"><i></i>Inkboard</div>
+  <div class="file" id="fileName">Whiteboard</div>
+  <div class="spacer"></div>
+  <div class="seg" role="group" aria-label="Page layout">
+    <button data-view="single" title="One page at a time"><svg viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4.5" y="1" width="7" height="12" rx="1"/></svg>1 page</button>
+    <button data-view="two" title="Two pages side by side (1–2, 3–4…)"><svg viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6.5" height="12" rx="1"/><rect x="8.5" y="1" width="6.5" height="12" rx="1"/></svg>2 pages</button>
+    <button data-view="book" title="Book: cover alone, then 2–3, 4–5…"><svg viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3C6 1.5 3.5 1.3 1 2v10.5c2.5-.7 5-.5 7 1 2-1.5 4.5-1.7 7-1V2c-2.5-.7-5-.5-7 1zM8 3v10.5"/></svg>Book</button>
+  </div>
+  <div class="pager"><button class="ib" id="prevBtn" title="Previous page (←)" aria-label="Previous page">‹</button><span id="pageLbl">1 / 1</span><button class="ib" id="nextBtn" title="Next page (→)" aria-label="Next page">›</button></div>
+  <div class="zoom"><button class="ib" id="zoomOut" title="Zoom out (−)" aria-label="Zoom out">−</button><span id="zoomLbl">Fit</span><button class="ib" id="zoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button><button class="ib" id="zoomFit" title="Fit width (0)">Fit</button></div>
+  <button class="ib primary" id="openBtn" title="Open PDF (O)">Open PDF</button>
+  <input type="file" id="fileInput" accept="application/pdf,.pdf" hidden>
+</header>
+
+<main id="stage" data-tool="pen"></main>
+
+<nav class="tools" aria-label="Annotation tools">
+  <button class="tool" data-tool="hand" title="Scroll / select (V or Esc)" aria-label="Scroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-7a1.5 1.5 0 0 1 3 0V12"/><path d="M14 6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.5L4.3 14.6a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/></svg></button>
+  <button class="tool" data-tool="laser" title="Laser pointer (L)" aria-label="Laser pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
+  <button class="tool" data-tool="pen" title="Pen (P)" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg></button>
+  <button class="tool" data-tool="hl" title="Highlighter (H)" aria-label="Highlighter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-2 2v3h3l2-2"/><path d="M9 14l7.5-9.5a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3L12 17z"/><path d="M3 21h8"/></svg></button>
+  <button class="tool" data-tool="eraser" title="Eraser (E)" aria-label="Eraser"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h13"/><path d="M4.7 15.3l9.9-9.9a2 2 0 0 1 2.8 0l2.2 2.2a2 2 0 0 1 0 2.8L11 19H8.4z"/><path d="M9 11l5 5"/></svg></button>
+  <div class="sep"></div>
+  <div id="swatches" style="display:contents"></div>
+  <div class="sep"></div>
+  <button class="tool size" data-size="0" title="Thin ([)" aria-label="Thin"><i style="width:4px;height:4px"></i></button>
+  <button class="tool size" data-size="1" title="Medium" aria-label="Medium"><i style="width:8px;height:8px"></i></button>
+  <button class="tool size" data-size="2" title="Thick (])" aria-label="Thick"><i style="width:13px;height:13px"></i></button>
+  <div class="sep"></div>
+  <button class="tool" id="fadeBtn" aria-pressed="false" title="Disappearing ink (D): strokes fade 2s after you lift the pen" aria-label="Disappearing ink"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 15c3-6 5 4 8-2s5 4 8-2" /><path d="M5 20h1M9 20h1M13 20h1M17 20h1"/></svg></button>
+  <button class="tool" id="undoBtn" title="Undo (⌘Z)" aria-label="Undo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+  <button class="tool" id="clearBtn" title="Clear this page (C). Shift-click clears all pages." aria-label="Clear page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button>
+  <button class="tool" id="blankBtn" title="Insert blank page after this one (B)" aria-label="Insert blank page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="1.5"/><path d="M12 9v6M9 12h6"/></svg></button>
+  <button class="tool" id="fsBtn" title="Full screen (F)" aria-label="Full screen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+  <button class="tool" id="helpBtn" title="Shortcuts (?)" aria-label="Keyboard shortcuts" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .8-1 1.5v.4"/><circle cx="12" cy="17" r=".6" fill="currentColor"/></svg></button>
+</nav>
+
+<aside class="help" id="help" hidden>
+  <h2>Shortcuts</h2>
+  <dl>
+    <dt><kbd>L</kbd></dt><dd>Laser pointer</dd>
+    <dt><kbd>P</kbd></dt><dd>Pen (hover shows a pointer dot)</dd>
+    <dt><kbd>H</kbd></dt><dd>Highlighter</dd>
+    <dt><kbd>E</kbd></dt><dd>Eraser</dd>
+    <dt><kbd>V</kbd> <kbd>Esc</kbd></dt><dd>Scroll / select text</dd>
+    <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Colors</dd>
+    <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Thinner / thicker</dd>
+    <dt><kbd>D</kbd></dt><dd>Disappearing ink on/off</dd>
+    <dt><kbd>⌘Z</kbd></dt><dd>Undo</dd>
+    <dt><kbd>C</kbd></dt><dd>Clear this page</dd>
+    <dt><kbd>B</kbd></dt><dd>Blank page after this one</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Previous / next page</dd>
+    <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Zoom in / out / fit</dd>
+    <dt><kbd>F</kbd></dt><dd>Full screen</dd>
+    <dt><kbd>U</kbd></dt><dd>Hide tools for a clean recording</dd>
+  </dl>
+  <p>Hold ⌘ or Ctrl and scroll (or pinch the trackpad) to zoom. Drop a PDF anywhere on the window to open it.</p>
+</aside>
+
+<canvas id="overlay"></canvas>
+<div class="toast" id="toast" hidden></div>
+<div class="drop" id="drop" hidden>Drop the PDF to open it</div>
+
+<script src="vendor/pdfjs/pdf.min.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const stage = $('#stage'), overlay = $('#overlay'), octx = overlay.getContext('2d');
+const COLORS = [['Red','#ff3b30'],['Orange','#ff9500'],['Yellow','#ffcc00'],['Green','#28c840'],['Blue','#0a7cff'],['Black','#15181d']];
+const PEN = [1.8, 3.2, 6], HLW = [12, 18, 28];
+const LASER_LIFE = 480, FADE_DELAY = 2000, FADE_DUR = 700;
+const state = { rows:[], view:'single', tool:'pen', color:COLORS[0][1], size:1, fade:false, zoom:1, scale:1, pages:[], pdf:null, current:0 };
+const history = [];
+const fading = new Set();
+let dpr = window.devicePixelRatio || 1;
+
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdfjs/pdf.worker.min.js';
+
+/* ---------- toast ---------- */
+let toastT;
+function toast(msg, ms = 2200){ const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, ms); }
+
+/* ---------- pages ---------- */
+const io = new IntersectionObserver(entries => {
+  for (const en of entries){ const p = en.target._p; p.vis = en.isIntersecting; if (p.vis) ensure(p); }
+}, { root: stage, rootMargin: '600px 0px' });
+
+function makePage(kind, w, h, num){
+  const el = document.createElement('div'); el.className = 'page';
+  const pc = document.createElement('canvas'); pc.className = 'pdf';
+  const ic = document.createElement('canvas'); ic.className = 'ink';
+  const lbl = document.createElement('div'); lbl.className = 'pnum';
+  el.append(pc, ic, lbl);
+  const p = { kind, w, h, num, el, pc, ic, lbl, ictx: ic.getContext('2d'), strokes: [], ds: 0, pr: 1, vis: false, tok: 0 };
+  el._p = p;
+  ic.addEventListener('pointerdown', e => onDown(e, p));
+  ic.addEventListener('pointermove', e => onMove(e, p));
+  ic.addEventListener('pointerup', e => onUp(e, p));
+  ic.addEventListener('pointercancel', e => onUp(e, p));
+  io.observe(el);
+  return p;
+}
+/* Group pages into rows: one per row, pairs, or cover-alone-then-pairs. */
+const GAP = 16;
+function arrange(){
+  const ps = state.pages, groups = [];
+  if (state.view === 'single') ps.forEach(p => groups.push([p]));
+  else { let i = 0; if (state.view === 'book' && ps.length){ groups.push([ps[0]]); i = 1; } for (; i < ps.length; i += 2) groups.push(ps.slice(i, i + 2)); }
+  stage.querySelectorAll('.row').forEach(r => r.remove());
+  for (const g of groups){ const r = document.createElement('div'); r.className = 'row'; g.forEach(p => r.append(p.el)); stage.append(r); }
+  state.rows = groups;
+}
+function setView(v, keepPlace = true){
+  state.view = v; try { localStorage.setItem('inkboard.view', v); } catch (e) {}
+  document.querySelectorAll('.seg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.view === v));
+  const cur = state.current; arrange(); numberPages(); layout();
+  if (keepPlace) requestAnimationFrame(() => goTo(cur, true));
+}
+const rowIndex = i => state.rows.findIndex(g => g.includes(state.pages[i]));
+function goRow(d){ const r = state.rows[rowIndex(state.current) + d]; if (r) goTo(state.pages.indexOf(r[0])); }
+function numberPages(){ state.pages.forEach((p, i) => p.lbl.textContent = (p.kind === 'blank' ? 'Board · ' : '') + (i + 1)); updatePager(); }
+
+function layout(){
+  const cs = getComputedStyle(stage);
+  const avail = stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+  const rowW = g => g.reduce((a, p) => a + p.w, 0);
+  let fit = Math.max(0.1, Math.min(3, ...state.rows.map(g => (avail - GAP * (g.length - 1)) / rowW(g))));
+  // In 2-page and book views, fit the whole spread on screen (width and height).
+  if (state.view !== 'single'){ const availH = stage.clientHeight - parseFloat(cs.paddingTop) - 24; const maxH = Math.max(...state.pages.map(p => p.h)); fit = Math.max(0.1, Math.min(fit, availH / maxH)); }
+  const ratio = stage.scrollHeight > stage.clientHeight ? stage.scrollTop / (stage.scrollHeight - stage.clientHeight) : 0;
+  state.scale = fit * state.zoom;
+  for (const p of state.pages){ p.el.style.width = p.w * state.scale + 'px'; p.el.style.height = p.h * state.scale + 'px'; }
+  stage.style.alignItems = state.rows.some(g => rowW(g) * state.scale + GAP * (g.length - 1) > avail + 1) ? 'flex-start' : 'center';
+  stage.scrollTop = ratio * (stage.scrollHeight - stage.clientHeight);
+  $('#zoomLbl').textContent = Math.round(state.zoom * 100) + '%';
+  clearTimeout(layout.t); layout.t = setTimeout(() => state.pages.forEach(p => p.vis && ensure(p)), 140);
+}
+
+function ensure(p){
+  const sc = state.scale;
+  if (p.ds === sc) return;
+  const k = Math.min(1, Math.sqrt(14e6 / (p.w * p.h * sc * sc * dpr * dpr)));
+  p.ds = sc; p.pr = dpr * k;
+  p.ic.width = Math.round(p.w * sc * p.pr); p.ic.height = Math.round(p.h * sc * p.pr);
+  redrawInk(p);
+  if (p.kind === 'pdf') renderPdf(p, sc, p.pr);
+}
+async function renderPdf(p, sc, pr){
+  const tok = ++p.tok;
+  try{
+    const page = await state.pdf.getPage(p.num);
+    const vp = page.getViewport({ scale: sc * pr });
+    const off = document.createElement('canvas'); off.width = Math.round(vp.width); off.height = Math.round(vp.height);
+    const ctx = off.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, off.width, off.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    if (tok !== p.tok) return;
+    p.pc.width = off.width; p.pc.height = off.height; p.pc.getContext('2d').drawImage(off, 0, 0);
+  }catch(err){ if (tok === p.tok) console.warn('render failed', err); }
+}
+
+/* ---------- ink drawing ---------- */
+const alphaOf = (s, now) => s.fadeAt && now > s.fadeAt ? Math.max(0, 1 - (now - s.fadeAt) / FADE_DUR) : 1;
+const pw = (s, pr) => s.pressure ? s.w * (0.3 + 1.4 * pr) : s.w;
+function seg(ctx, s, a, b){ ctx.lineWidth = pw(s, (a[2] + b[2]) / 2); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
+function drawStroke(ctx, s, a){
+  const pts = s.pts; ctx.strokeStyle = ctx.fillStyle = s.color; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (s.tool === 'hl'){
+    ctx.globalAlpha = 0.32 * a; ctx.lineWidth = s.w; ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+    if (pts.length === 1) ctx.lineTo(pts[0][0] + 0.01, pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++){ const m = [(pts[i][0] + pts[i+1][0]) / 2, (pts[i][1] + pts[i+1][1]) / 2]; ctx.quadraticCurveTo(pts[i][0], pts[i][1], m[0], m[1]); }
+    if (pts.length > 1) ctx.lineTo(pts.at(-1)[0], pts.at(-1)[1]);
+    ctx.stroke(); ctx.globalAlpha = 1; return;
+  }
+  ctx.globalAlpha = a;
+  if (pts.length === 1){ ctx.beginPath(); ctx.arc(pts[0][0], pts[0][1], pw(s, pts[0][2]) / 2, 0, 7); ctx.fill(); }
+  for (let i = 1; i < pts.length; i++) seg(ctx, s, pts[i-1], pts[i]);
+  ctx.globalAlpha = 1;
+}
+function inkTransform(p){ const m = p.pr * p.ds; p.ictx.setTransform(m, 0, 0, m, 0, 0); }
+function redrawInk(p, now = performance.now()){
+  const c = p.ictx; c.setTransform(1, 0, 0, 1, 0, 0); c.clearRect(0, 0, p.ic.width, p.ic.height);
+  inkTransform(p); for (const s of p.strokes) drawStroke(c, s, alphaOf(s, now));
+}
+
+/* ---------- pointer input on pages ---------- */
+let active = null;
+function local(e, r){ return [(e.clientX - r.left) / state.scale, (e.clientY - r.top) / state.scale, e.pointerType === 'pen' ? (e.pressure || 0.5) : 0.5]; }
+function onDown(e, p){
+  const t = state.tool;
+  if (!['pen','hl','eraser'].includes(t) || (e.pointerType === 'mouse' && e.button !== 0) || active) return;
+  e.preventDefault(); p.ic.setPointerCapture(e.pointerId);
+  setCurrent(state.pages.indexOf(p));
+  const r = p.ic.getBoundingClientRect();
+  if (t === 'eraser'){ active = { p, id: e.pointerId, erased: [] }; eraseAt(p, local(e, r)); return; }
+  const s = { tool: t, color: state.color, w: (t === 'hl' ? HLW : PEN)[state.size], pressure: t === 'pen' && e.pointerType === 'pen', fade: state.fade, pts: [local(e, r)] };
+  p.strokes.push(s); active = { p, s, id: e.pointerId };
+  if (t === 'hl') redrawInk(p); else { inkTransform(p); drawStroke(p.ictx, s, 1); }
+}
+function onMove(e, p){
+  if (!active || active.id !== e.pointerId || active.p !== p) return;
+  const r = p.ic.getBoundingClientRect();
+  const evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+  if (active.erased){ for (const ev of (evs.length ? evs : [e])) eraseAt(p, local(ev, r)); return; }
+  const s = active.s, c = p.ictx; inkTransform(p);
+  c.strokeStyle = s.color; c.lineCap = 'round';
+  for (const ev of (evs.length ? evs : [e])){
+    const pt = local(ev, r), last = s.pts.at(-1);
+    if (Math.hypot(pt[0] - last[0], pt[1] - last[1]) < 0.3 / state.scale) continue;
+    s.pts.push(pt);
+    if (s.tool === 'pen') seg(c, s, last, pt);
+  }
+  if (s.tool === 'hl') redrawInk(p);
+}
+function onUp(e, p){
+  if (!active || active.id !== e.pointerId) return;
+  if (active.erased){ if (active.erased.length) history.push({ type: 'remove', items: active.erased }); }
+  else {
+    const s = active.s; history.push({ type: 'add', p, s });
+    if (s.fade){ s.fadeAt = performance.now() + FADE_DELAY; fading.add(p); }
+  }
+  active = null;
+}
+function distSeg(px, py, a, b){
+  const dx = b[0] - a[0], dy = b[1] - a[1], L = dx*dx + dy*dy;
+  let t = L ? ((px - a[0]) * dx + (py - a[1]) * dy) / L : 0; t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (a[0] + t*dx), py - (a[1] + t*dy));
+}
+function eraseAt(p, [x, y]){
+  const r = 12 / state.scale; let hit = false;
+  for (let i = p.strokes.length - 1; i >= 0; i--){
+    const s = p.strokes[i], pts = s.pts, lim = r + s.w / 2;
+    let h = pts.length === 1 ? Math.hypot(x - pts[0][0], y - pts[0][1]) <= lim : false;
+    for (let j = 1; !h && j < pts.length; j++) if (distSeg(x, y, pts[j-1], pts[j]) <= lim) h = true;
+    if (h){ p.strokes.splice(i, 1); active.erased.push({ p, s, i }); hit = true; }
+  }
+  if (hit) redrawInk(p);
+}
+
+/* ---------- undo / clear ---------- */
+function undo(){
+  const op = history.pop(); if (!op){ toast('Nothing to undo'); return; }
+  if (op.type === 'add'){ const i = op.p.strokes.indexOf(op.s); if (i >= 0) op.p.strokes.splice(i, 1); redrawInk(op.p); }
+  else if (op.type === 'remove'){ const touched = new Set(); for (const it of op.items.slice().reverse()){ it.p.strokes.splice(it.i, 0, it.s); touched.add(it.p); } touched.forEach(p => redrawInk(p)); }
+  else if (op.type === 'clear'){ for (const it of op.items){ it.p.strokes = it.strokes; redrawInk(it.p); } }
+}
+function clearInk(all){
+  const targets = all ? state.pages : [state.pages[state.current]];
+  const items = targets.filter(p => p.strokes.length).map(p => ({ p, strokes: p.strokes }));
+  if (!items.length){ toast(all ? 'No ink to clear' : 'This page has no ink'); return; }
+  items.forEach(it => { it.p.strokes = []; redrawInk(it.p); });
+  history.push({ type: 'clear', items });
+  toast((all ? 'Cleared all pages' : 'Cleared this page') + '. Press ⌘Z to undo.');
+}
+
+/* ---------- laser + cursor overlay ---------- */
+let hover = null; const trail = [];
+function sizeOverlay(){ dpr = window.devicePixelRatio || 1; overlay.width = innerWidth * dpr; overlay.height = innerHeight * dpr; }
+stage.addEventListener('pointermove', e => {
+  hover = { x: e.clientX, y: e.clientY };
+  if (state.tool === 'laser'){
+    const now = performance.now(), evs = e.getCoalescedEvents ? e.getCoalescedEvents() : [];
+    for (const ev of (evs.length ? evs : [e])) trail.push({ x: ev.clientX, y: ev.clientY, t: now });
+  }
+});
+stage.addEventListener('pointerleave', () => { hover = null; });
+stage.addEventListener('scroll', () => { updateCurrentFromScroll(); });
+
+function frame(now){
+  octx.setTransform(dpr, 0, 0, dpr, 0, 0); octx.clearRect(0, 0, innerWidth, innerHeight);
+  const col = state.color;
+  if (state.tool === 'laser'){
+    while (trail.length && now - trail[0].t > LASER_LIFE) trail.shift();
+    octx.lineCap = 'round'; octx.strokeStyle = col; octx.shadowColor = col; octx.shadowBlur = 12;
+    for (let i = 1; i < trail.length; i++){
+      const k = 1 - (now - trail[i].t) / LASER_LIFE;
+      octx.globalAlpha = Math.max(0, k) * 0.85; octx.lineWidth = 1.5 + 5.5 * k;
+      octx.beginPath(); octx.moveTo(trail[i-1].x, trail[i-1].y); octx.lineTo(trail[i].x, trail[i].y); octx.stroke();
+    }
+    if (hover){
+      octx.shadowBlur = 20; octx.fillStyle = col;
+      octx.globalAlpha = 0.28; octx.beginPath(); octx.arc(hover.x, hover.y, 12, 0, 7); octx.fill();
+      octx.globalAlpha = 1; octx.beginPath(); octx.arc(hover.x, hover.y, 6, 0, 7); octx.fill();
+      octx.shadowBlur = 0; octx.fillStyle = '#fff'; octx.globalAlpha = 0.9; octx.beginPath(); octx.arc(hover.x, hover.y, 2.2, 0, 7); octx.fill();
+    }
+    octx.shadowBlur = 0; octx.globalAlpha = 1;
+  } else if (hover && state.tool !== 'hand'){
+    octx.globalAlpha = 1;
+    if (state.tool === 'eraser'){
+      octx.lineWidth = 1.5; octx.strokeStyle = '#555'; octx.fillStyle = 'rgba(255,255,255,.55)';
+      octx.beginPath(); octx.arc(hover.x, hover.y, 12, 0, 7); octx.fill(); octx.stroke();
+    } else {
+      const r = Math.max(3.5, (state.tool === 'hl' ? HLW : PEN)[state.size] * state.scale * 0.5);
+      octx.fillStyle = col; octx.globalAlpha = state.tool === 'hl' ? 0.4 : 0.9;
+      octx.shadowColor = col; octx.shadowBlur = active ? 0 : 10;
+      octx.beginPath(); octx.arc(hover.x, hover.y, r, 0, 7); octx.fill();
+      octx.shadowBlur = 0; octx.globalAlpha = 1; octx.lineWidth = 1; octx.strokeStyle = 'rgba(255,255,255,.9)'; octx.stroke();
+    }
+  }
+  for (const p of fading){
+    let any = false, changed = false;
+    const keep = [];
+    for (const s of p.strokes){
+      if (s.fadeAt){ any = true; if (now > s.fadeAt + FADE_DUR){ changed = true; continue; } if (now > s.fadeAt) changed = true; }
+      keep.push(s);
+    }
+    if (changed){ p.strokes = keep; redrawInk(p, now); }
+    if (!any) fading.delete(p);
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------- toolbar ---------- */
+const sw = $('#swatches');
+COLORS.forEach(([name, hex], i) => {
+  const b = document.createElement('button'); b.className = 'sw'; b.style.background = hex; b.dataset.color = hex;
+  b.title = `${name} (${i + 1})`; b.setAttribute('aria-label', name); b.onclick = () => setColor(hex); sw.append(b);
+});
+function setTool(t){
+  state.tool = t; stage.dataset.tool = t; trail.length = 0;
+  document.querySelectorAll('.tool[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+}
+function setColor(c){ state.color = c; document.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-pressed', b.dataset.color === c)); if (state.tool === 'hand' || state.tool === 'eraser') setTool('pen'); }
+function setSize(i){ state.size = Math.max(0, Math.min(2, i)); document.querySelectorAll('.size').forEach(b => b.setAttribute('aria-pressed', +b.dataset.size === state.size)); }
+function setFade(on){ state.fade = on; $('#fadeBtn').setAttribute('aria-pressed', on); toast(on ? 'Disappearing ink on: strokes fade after 2 seconds' : 'Disappearing ink off: strokes stay'); }
+document.querySelectorAll('.tool[data-tool]').forEach(b => b.onclick = () => setTool(b.dataset.tool));
+document.querySelectorAll('.size').forEach(b => b.onclick = () => setSize(+b.dataset.size));
+$('#fadeBtn').onclick = () => setFade(!state.fade);
+$('#undoBtn').onclick = undo;
+$('#clearBtn').onclick = e => clearInk(e.shiftKey);
+$('#blankBtn').onclick = addBlank;
+$('#fsBtn').onclick = toggleFs;
+$('#helpBtn').onclick = () => { const h = $('#help'); h.hidden = !h.hidden; $('#helpBtn').setAttribute('aria-pressed', !h.hidden); };
+$('#openBtn').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = e => { openFile(e.target.files[0]); e.target.value = ''; };
+$('#zoomIn').onclick = () => zoomBy(1.2);
+$('#zoomOut').onclick = () => zoomBy(1 / 1.2);
+$('#zoomFit').onclick = () => { state.zoom = 1; layout(); };
+$('#prevBtn').onclick = () => goRow(-1);
+$('#nextBtn').onclick = () => goRow(1);
+document.querySelectorAll('.seg button').forEach(b => b.onclick = () => setView(b.dataset.view));
+
+function toggleFs(){
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else (document.documentElement.requestFullscreen?.() || Promise.reject()).catch(() => toast('Full screen isn’t available in this view. Use your browser’s full screen instead.'));
+}
+function zoomBy(f){ state.zoom = Math.max(0.4, Math.min(4, state.zoom * f)); if (Math.abs(state.zoom - 1) < 0.02) state.zoom = 1; layout(); }
+stage.addEventListener('wheel', e => { if (e.ctrlKey || e.metaKey){ e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.01)); } }, { passive: false });
+
+/* ---------- navigation ---------- */
+function setCurrent(i){ state.current = Math.max(0, Math.min(state.pages.length - 1, i)); updatePager(); }
+function updatePager(){
+  const g = state.rows && state.rows[rowIndex(state.current)];
+  const lbl = g && g.length > 1 ? `${state.pages.indexOf(g[0]) + 1}–${state.pages.indexOf(g[1]) + 1}` : `${state.current + 1}`;
+  $('#pageLbl').textContent = `${lbl} / ${state.pages.length}`;
+}
+function updateCurrentFromScroll(){
+  const mid = stage.getBoundingClientRect().top + stage.clientHeight / 2; let best = 0, bd = Infinity;
+  state.pages.forEach((p, i) => { const r = p.el.getBoundingClientRect(); const d = r.top <= mid && r.bottom >= mid ? 0 : Math.min(Math.abs(r.top - mid), Math.abs(r.bottom - mid)); if (d < bd){ bd = d; best = i; } });
+  if (best !== state.current) setCurrent(best);
+}
+function goTo(i, instant){ if (i < 0 || i >= state.pages.length) return; setCurrent(i); stage.scrollTo({ top: state.pages[i].el.offsetTop - 16, behavior: instant || matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+
+function addBlank(){
+  const ref = state.pages[state.current];
+  const w = ref ? ref.w : 960, h = ref ? ref.h : 540;
+  const p = makePage('blank', w, h);
+  state.pages.splice(state.current + 1, 0, p);
+  arrange(); numberPages(); layout(); requestAnimationFrame(() => goTo(state.current + 1));
+  toast('Blank page added');
+}
+
+/* ---------- open PDF ---------- */
+async function openFile(file){
+  if (!file) return;
+  if (!(file.type === 'application/pdf' || /\.pdf$/i.test(file.name))){ toast('That file isn’t a PDF. Choose a .pdf file.'); return; }
+  if (!window.pdfjsLib){ toast('The PDF engine didn’t load. Check your connection and reload the page.', 4000); return; }
+  toast('Opening ' + file.name + '…', 10000);
+  try{
+    const data = new Uint8Array(await file.arrayBuffer());
+    const pdf = await pdfjsLib.getDocument({ data, isEvalSupported: false }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++){ const pg = await pdf.getPage(i); const vp = pg.getViewport({ scale: 1 }); pages.push([vp.width, vp.height]); }
+    state.pages.forEach(p => { io.unobserve(p.el); p.el.remove(); });
+    fading.clear(); history.length = 0; state.pdf = pdf; state.zoom = 1;
+    state.pages = pages.map(([w, h], i) => makePage('pdf', w, h, i + 1));
+    arrange();
+    $('#fileName').textContent = file.name; document.title = file.name.replace(/\.pdf$/i, '') + ' · Inkboard';
+    numberPages(); setCurrent(0); layout(); stage.scrollTop = 0;
+    toast(`Opened ${pdf.numPages} page${pdf.numPages > 1 ? 's' : ''}`);
+  }catch(err){
+    console.error(err);
+    toast(err && err.name === 'PasswordException' ? 'This PDF is password-protected. Remove the password and try again.' : 'Couldn’t open this PDF. The file may be damaged.', 4500);
+  }
+}
+let dragDepth = 0;
+addEventListener('dragenter', e => { if ([...(e.dataTransfer?.types || [])].includes('Files')){ dragDepth++; $('#drop').hidden = false; } });
+addEventListener('dragleave', () => { if (--dragDepth <= 0){ dragDepth = 0; $('#drop').hidden = true; } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragDepth = 0; $('#drop').hidden = true; openFile(e.dataTransfer.files[0]); });
+
+/* ---------- keyboard ---------- */
+addEventListener('keydown', e => {
+  if (e.target.closest && e.target.closest('input,textarea')) return;
+  const k = e.key, mod = e.metaKey || e.ctrlKey;
+  if (mod && k.toLowerCase() === 'z'){ e.preventDefault(); undo(); return; }
+  if (mod && k.toLowerCase() === 'o'){ e.preventDefault(); $('#fileInput').click(); return; }
+  if (mod || e.altKey) return;
+  const map = { l:'laser', p:'pen', h:'hl', e:'eraser', v:'hand' };
+  const lk = k.toLowerCase();
+  if (map[lk]){ setTool(map[lk]); return; }
+  if (k === 'Escape'){ if (!$('#help').hidden) $('#helpBtn').click(); else setTool('hand'); return; }
+  if (/^[1-6]$/.test(k)){ setColor(COLORS[+k - 1][1]); return; }
+  if (k === '[') return setSize(state.size - 1);
+  if (k === ']') return setSize(state.size + 1);
+  if (lk === 'd') return setFade(!state.fade);
+  if (lk === 'c') return clearInk(e.shiftKey);
+  if (lk === 'b') return addBlank();
+  if (lk === 'f') return toggleFs();
+  if (lk === 'o') return $('#fileInput').click();
+  if (lk === 'u'){ document.body.classList.toggle('bare'); layout(); if (document.body.classList.contains('bare')) toast('Tools hidden. Press U to show them.'); return; }
+  if (k === '?') return $('#helpBtn').click();
+  if (k === '+' || k === '=') return zoomBy(1.2);
+  if (k === '-' || k === '_') return zoomBy(1 / 1.2);
+  if (k === '0'){ state.zoom = 1; layout(); return; }
+  if (k === 'ArrowRight' || k === 'PageDown'){ e.preventDefault(); goRow(1); }
+  if (k === 'ArrowLeft' || k === 'PageUp'){ e.preventDefault(); goRow(-1); }
+});
+
+/* ---------- boot: a blank board so the pen works right away ---------- */
+const first = makePage('blank', 960, 540);
+const w = document.createElement('div'); w.className = 'welcome';
+w.innerHTML = '<div><h1>Write on any PDF while you record</h1><p>Hover with the laser (L) to point. Press the stylus down with the pen (P) to write. Try it on this board, then open your PDF.</p><button type="button">Open a PDF</button></div>';
+w.querySelector('button').onclick = () => $('#fileInput').click();
+first.el.append(w);
+state.pages = [first];
+first.ic.addEventListener('pointerdown', () => { w.remove(); }, { once: true });
+setTool('pen'); setColor(state.color); setSize(1);
+sizeOverlay();
+let savedView = 'single'; try { savedView = localStorage.getItem('inkboard.view') || 'single'; } catch (e) {}
+setView(['single','two','book'].includes(savedView) ? savedView : 'single', false);
+addEventListener('resize', () => { sizeOverlay(); layout(); });
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
