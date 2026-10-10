@@ -52,7 +52,21 @@ kbd{font-family:var(--mono);font-size:11px;padding:1px 5px;border:1px solid var(
 .page{position:relative;flex:none;background:#fff;box-shadow:var(--shadow);border-radius:2px}
 .page canvas{position:absolute;inset:0;width:100%;height:100%}
 .page .ink{touch-action:none}
-#stage[data-tool="hand"] .ink,#stage[data-tool="laser"] .ink{pointer-events:none;touch-action:auto}
+#stage[data-tool="hand"] .ink,#stage[data-tool="laser"] .ink,#stage[data-tool="select"] .ink{pointer-events:none;touch-action:auto}
+.textLayer{position:absolute;inset:0;overflow:hidden;isolation:isolate;line-height:1;pointer-events:none;-webkit-user-select:none;user-select:none}
+.textLayer span,.textLayer br{color:transparent;position:absolute;white-space:pre;transform-origin:0 0}
+/* Grow each line's hit area to the right and slightly up/down so a drag past the end of a line still selects it. Applied after PDF.js measures the spans. */
+.textLayer.ready span{padding:.3em 4000px .3em 0;margin-top:-.3em}
+.textLayer .markedContent{position:static;display:contents}
+.textLayer .endOfContent{display:block;position:absolute;inset:100% 0 0;z-index:-1;cursor:default;-webkit-user-select:none;user-select:none}
+.textLayer.selecting .endOfContent{top:0}
+.textLayer span::selection{background:color-mix(in srgb,var(--accent) 35%,transparent)}
+.textLayer br::selection,.textLayer .endOfContent::selection{background:transparent}
+#stage[data-tool="select"] .textLayer{pointer-events:auto;-webkit-user-select:text;user-select:text}
+#stage[data-tool="select"] .textLayer span{cursor:text}
+.copybar{position:fixed;z-index:35;display:flex;gap:2px;padding:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);-webkit-user-select:none;user-select:none}
+.copybar[hidden]{display:none}
+.copybar button{font-size:12px;font-weight:600;color:var(--fg)}
 .pnum{position:absolute;top:100%;right:0;margin-top:4px;font-family:var(--mono);font-size:11px;color:var(--muted)}
 
 .welcome{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;padding:16px}
@@ -115,7 +129,8 @@ body.bare #stage{padding-left:24px}
 <main id="stage" data-tool="pen"></main>
 
 <nav class="tools" aria-label="Annotation tools">
-  <button class="tool" data-tool="hand" title="Scroll / select (V or Esc)" aria-label="Scroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-7a1.5 1.5 0 0 1 3 0V12"/><path d="M14 6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.5L4.3 14.6a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/></svg></button>
+  <button class="tool" data-tool="hand" title="Scroll (V or Esc)" aria-label="Scroll"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-7a1.5 1.5 0 0 1 3 0V12"/><path d="M14 6.5a1.5 1.5 0 0 1 3 0V13"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.9-2.5L4.3 14.6a1.5 1.5 0 0 1 2.4-1.8L8 14.5"/></svg></button>
+  <button class="tool" data-tool="select" title="Select &amp; copy text (T)" aria-label="Select and copy text"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4h6M9 20h6M12 4v16"/></svg></button>
   <button class="tool" data-tool="laser" title="Laser pointer (L)" aria-label="Laser pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3" fill="currentColor"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1"/></svg></button>
   <button class="tool" data-tool="pen" title="Pen (P)" aria-label="Pen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19z"/><path d="M14.5 6.5l3 3"/></svg></button>
   <button class="tool" data-tool="hl" title="Highlighter (H)" aria-label="Highlighter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14l-2 2v3h3l2-2"/><path d="M9 14l7.5-9.5a2 2 0 0 1 3 0l1 1a2 2 0 0 1 0 3L12 17z"/><path d="M3 21h8"/></svg></button>
@@ -142,7 +157,8 @@ body.bare #stage{padding-left:24px}
     <dt><kbd>P</kbd></dt><dd>Pen (hover shows a pointer dot)</dd>
     <dt><kbd>H</kbd></dt><dd>Highlighter</dd>
     <dt><kbd>E</kbd></dt><dd>Eraser</dd>
-    <dt><kbd>V</kbd> <kbd>Esc</kbd></dt><dd>Scroll / select text</dd>
+    <dt><kbd>V</kbd> <kbd>Esc</kbd></dt><dd>Scroll</dd>
+    <dt><kbd>T</kbd></dt><dd>Select and copy text (back to your last tool after copying)</dd>
     <dt><kbd>1</kbd>–<kbd>6</kbd></dt><dd>Colors</dd>
     <dt><kbd>[</kbd> <kbd>]</kbd></dt><dd>Thinner / thicker</dd>
     <dt><kbd>D</kbd></dt><dd>Disappearing ink on/off</dd>
@@ -158,6 +174,7 @@ body.bare #stage{padding-left:24px}
 </aside>
 
 <canvas id="overlay"></canvas>
+<div class="copybar" id="copyBar" hidden><button class="ib" id="copyRaw" title="Copy exactly as written">Copy</button><button class="ib" id="copyCmd" title="One line, straight quotes and plain dashes, ready for a terminal">Copy for terminal</button></div>
 <div class="toast" id="toast" hidden></div>
 <div class="drop" id="drop" hidden>Drop the PDF to open it</div>
 
@@ -190,9 +207,11 @@ function makePage(kind, w, h, num){
   const pc = document.createElement('canvas'); pc.className = 'pdf';
   const ic = document.createElement('canvas'); ic.className = 'ink';
   const lbl = document.createElement('div'); lbl.className = 'pnum';
-  el.append(pc, ic, lbl);
-  const p = { kind, w, h, num, el, pc, ic, lbl, ictx: ic.getContext('2d'), strokes: [], ds: 0, pr: 1, vis: false, tok: 0 };
+  const tl = document.createElement('div'); tl.className = 'textLayer';
+  el.append(pc, ic, tl, lbl);
+  const p = { kind, w, h, num, el, pc, ic, tl, lbl, ictx: ic.getContext('2d'), strokes: [], ds: 0, pr: 1, vis: false, tok: 0 };
   el._p = p;
+  tl.addEventListener('pointerdown', () => { tl.classList.add('selecting'); addEventListener('pointerup', () => tl.classList.remove('selecting'), { once: true }); });
   ic.addEventListener('pointerdown', e => onDown(e, p));
   ic.addEventListener('pointermove', e => onMove(e, p));
   ic.addEventListener('pointerup', e => onUp(e, p));
@@ -255,6 +274,14 @@ async function renderPdf(p, sc, pr){
     await page.render({ canvasContext: ctx, viewport: vp }).promise;
     if (tok !== p.tok) return;
     p.pc.width = off.width; p.pc.height = off.height; p.pc.getContext('2d').drawImage(off, 0, 0);
+    // Invisible, selectable text on top of the canvas so commands can be copied (Scroll/select mode).
+    const tvp = page.getViewport({ scale: sc });
+    const tc = await page.getTextContent();
+    if (tok !== p.tok) return;
+    p.tl.classList.remove('ready'); p.tl.replaceChildren(); p.tl.style.setProperty('--scale-factor', sc);
+    await pdfjsLib.renderTextLayer({ textContentSource: tc, container: p.tl, viewport: tvp, textDivs: [] }).promise;
+    if (tok !== p.tok) return;
+    const eoc = document.createElement('div'); eoc.className = 'endOfContent'; p.tl.append(eoc); p.tl.classList.add('ready');
   }catch(err){ if (tok === p.tok) console.warn('render failed', err); }
 }
 
@@ -416,9 +443,43 @@ COLORS.forEach(([name, hex], i) => {
   b.title = `${name} (${i + 1})`; b.setAttribute('aria-label', name); b.onclick = () => setColor(hex); sw.append(b);
 });
 function setTool(t){
+  if (t === 'select' && state.tool !== 'select') state.prev = state.tool;
+  if (t !== 'select') hideCopyBar();
   state.tool = t; stage.dataset.tool = t; trail.length = 0;
   document.querySelectorAll('.tool[data-tool]').forEach(b => b.setAttribute('aria-pressed', b.dataset.tool === t));
+  if (t === 'select') toast('Select text, then press Copy (or ⌘C)', 3000);
 }
+
+/* ---------- select & copy ---------- */
+const copyBar = $('#copyBar');
+let dragging = false;
+function selText(){ const s = getSelection(); return s && !s.isCollapsed && stage.contains(s.anchorNode) ? s.toString() : ''; }
+// Terminal-safe: join wrapped lines (and trailing "\" continuations), straighten quotes, turn typographic dashes into "-".
+const forTerminal = t => t.replace(/[\u2018\u2019]/g, "'").replace(/[\u201C\u201D]/g, '"').replace(/[\u2010-\u2015\u2212]/g, '-').replace(/\u00a0/g, ' ')
+  .replace(/\s*\\\s*\n\s*/g, ' ').replace(/\s*\n\s*/g, ' ').trim();
+function hideCopyBar(){ copyBar.hidden = true; }
+function showCopyBar(){
+  if (state.tool !== 'select' || !selText()) return hideCopyBar();
+  const rs = getSelection().getRangeAt(0).getClientRects(); if (!rs.length) return hideCopyBar();
+  const r = rs[rs.length - 1]; copyBar.hidden = false;
+  const w = copyBar.offsetWidth, h = copyBar.offsetHeight;
+  copyBar.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.right - w)) + 'px';
+  copyBar.style.top = (r.bottom + 10 + h > innerHeight ? Math.max(8, r.top - h - 10) : r.bottom + 10) + 'px';
+}
+async function doCopy(fn){
+  const t = fn(selText()); if (!t) return;
+  try{ await navigator.clipboard.writeText(t); }
+  catch{ const ta = document.createElement('textarea'); ta.value = t; ta.style.cssText = 'position:fixed;opacity:0'; document.body.append(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+  getSelection().removeAllRanges(); hideCopyBar(); toast('Copied');
+  setTool(state.prev && state.prev !== 'select' ? state.prev : 'pen');
+}
+copyBar.addEventListener('pointerdown', e => e.preventDefault());
+$('#copyRaw').onclick = () => doCopy(t => t);
+$('#copyCmd').onclick = () => doCopy(forTerminal);
+stage.addEventListener('pointerdown', () => { dragging = true; hideCopyBar(); });
+addEventListener('pointerup', () => { if (!dragging) return; dragging = false; setTimeout(showCopyBar, 0); });
+addEventListener('copy', () => { if (state.tool === 'select' && selText()) toast('Copied'); });
+stage.addEventListener('scroll', hideCopyBar, { passive: true });
 function setColor(c){ state.color = c; document.querySelectorAll('.sw').forEach(b => b.setAttribute('aria-pressed', b.dataset.color === c)); if (state.tool === 'hand' || state.tool === 'eraser') setTool('pen'); }
 function setSize(i){ state.size = Math.max(0, Math.min(2, i)); document.querySelectorAll('.size').forEach(b => b.setAttribute('aria-pressed', +b.dataset.size === state.size)); }
 function setFade(on){ state.fade = on; $('#fadeBtn').setAttribute('aria-pressed', on); toast(on ? 'Disappearing ink on: strokes fade after 2 seconds' : 'Disappearing ink off: strokes stay'); }
@@ -505,7 +566,7 @@ addEventListener('keydown', e => {
   if (mod && k.toLowerCase() === 'z'){ e.preventDefault(); undo(); return; }
   if (mod && k.toLowerCase() === 'o'){ e.preventDefault(); $('#fileInput').click(); return; }
   if (mod || e.altKey) return;
-  const map = { l:'laser', p:'pen', h:'hl', e:'eraser', v:'hand' };
+  const map = { l:'laser', p:'pen', h:'hl', e:'eraser', v:'hand', t:'select' };
   const lk = k.toLowerCase();
   if (map[lk]){ setTool(map[lk]); return; }
   if (k === 'Escape'){ if (!$('#help').hidden) $('#helpBtn').click(); else setTool('hand'); return; }

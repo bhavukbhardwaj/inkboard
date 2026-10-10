@@ -11,6 +11,7 @@ Built for teachers, students and anyone explaining a document on camera, especia
 - **Highlighter** and **stroke eraser**.
 - **Disappearing ink**: strokes fade two seconds after you lift the pen, so the page stays clean while you talk.
 - **Page layouts**: one page, two pages side by side, or book view (cover alone, then 2–3, 4–5…).
+- **Select & copy text**: a dedicated tool (`T`) for copying commands, code or any text out of the PDF. Select, then press **Copy** or **Copy for terminal** (one line, straight quotes, plain dashes, so pasted commands run). It switches back to your last tool afterwards, so it never gets in the way of writing.
 - **Blank boards**: insert an empty page anywhere to work something out.
 - Six colours, three widths, undo, zoom, full screen, and a "hide tools" mode for clean recordings.
 - Runs fully offline. Your PDF never leaves your computer.
@@ -53,7 +54,8 @@ Double-click `index.html`. It opens in your browser and works the same way.
 3. Pick **1 page**, **2 pages** or **Book** at the top.
 4. Press **F** for full screen and **U** to hide the toolbars if you want a clean frame.
 5. Start your recorder (QuickTime: File > New Screen Recording, or OBS, Loom, Zoom).
-6. Switch with the keyboard while you talk: **L** to point, **P** to write, **D** for disappearing ink.
+6. Need to copy a command from the PDF? Press **T**, drag over it, then click **Copy for terminal**.
+7. Switch with the keyboard while you talk: **L** to point, **P** to write, **D** for disappearing ink.
 
 ### Keyboard shortcuts
 
@@ -63,7 +65,8 @@ Double-click `index.html`. It opens in your browser and works the same way.
 | `P` | Pen |
 | `H` | Highlighter |
 | `E` | Eraser |
-| `V` / `Esc` | Scroll and select text |
+| `V` / `Esc` | Scroll |
+| `T` | Select and copy text |
 | `1`–`6` | Colours |
 | `[` / `]` | Thinner / thicker |
 | `D` | Disappearing ink on/off |
