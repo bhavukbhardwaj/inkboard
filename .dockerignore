@@ -1,5 +1,7 @@
 .git
 .github
+docs
 *.md
+VERSION
 start.sh
 docker-compose.yml
