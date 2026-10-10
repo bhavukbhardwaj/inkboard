@@ -1,5 +1,5 @@
 # Inkboard: a static web app served by nginx.
-FROM nginx:1.27-alpine
+FROM nginx:1.31-alpine
 
 LABEL org.opencontainers.image.title="Inkboard" \
       org.opencontainers.image.description="PDF viewer with laser pointer, pen and highlighter for screen recording and teaching" \
